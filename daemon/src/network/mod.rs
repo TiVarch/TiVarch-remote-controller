@@ -22,6 +22,7 @@ pub struct AppState {
     pub state_machine: Mutex<InputStateMachine>,
 }
 
+/// Binds TCP socket and serves the backup web client and WebSocket channel.
 pub async fn start_server(port: u16, input: Arc<InputEngine>) -> anyhow::Result<()> {
     let state = Arc::new(AppState {
         input,
@@ -54,6 +55,7 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
     let (mut sender, mut receiver) = socket.split();
     info!("Client connected via WebSocket.");
 
+    // Clean session state on fresh connection
     {
         let mut sm = state.state_machine.lock().await;
         let hanging = sm.drain_active_keys();
@@ -120,6 +122,10 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
                                 }
                             }
                         }
+                        RemoteCommand::SetProfile { profile } => {
+                            info!("Switching target environment profile to {:?}", profile);
+                            sm.set_environment(profile);
+                        }
                         RemoteCommand::Ping => {
                             let resp = serde_json::to_string(&RemoteResponse::Pong).unwrap();
                             let _ = sender.send(Message::Text(resp.into())).await;
@@ -131,6 +137,7 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
         }
     }
 
+    // Dead-man switch: client disconnected, release held keys immediately
     info!("Client disconnected. Releasing all held keys...");
     let mut sm = state.state_machine.lock().await;
     let hanging_keys = sm.drain_active_keys();

@@ -3,6 +3,14 @@ name = "tivarch-remote-daemon"
 version = "0.1.0"
 edition = "2021"
 
+[lib]
+name = "tivarch_remote_daemon"
+path = "src/lib.rs"
+
+[[bin]]
+name = "tivarch-remote-daemon"
+path = "src/main.rs"
+
 [dependencies]
 # Async Runtime & Eşzamanlılık
 tokio = { version = "1", features = ["full"] }
