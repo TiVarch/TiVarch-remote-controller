@@ -1,0 +1,28 @@
+[package]
+name = "tivarch-remote-daemon"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# Async Runtime & Eşzamanlılık
+tokio = { version = "1", features = ["full"] }
+futures-util = "0.3"
+
+# Web Server & WebSocket (Wi-Fi katmanı)
+axum = { version = "0.8", features = ["ws"] }
+tower-http = { version = "0.6", features = ["cors", "fs"] }
+
+# Linux Çekirdeği Girdi Aygıtı Emülasyonu (/dev/uinput)
+evdev = "0.12"
+
+# Bluetooth Low Energy (BlueZ D-Bus GATT Server)
+bluer = { version = "0.17", features = ["bluetoothd"] }
+
+# Serileştirme (İstemci & Sunucu veri protokolü)
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Hata ve Log Yönetimi
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+anyhow = "1.0"
