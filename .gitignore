@@ -1,1 +1,47 @@
-/target
+# ==========================================
+# Rust / Cargo
+# ==========================================
+**/target/
+**/*.rs.bk
+Cargo.lock.bak
+
+# ==========================================
+# Flutter / Dart
+# ==========================================
+**/.dart_tool/
+**/.flutter-plugins
+**/.flutter-plugins-dependencies
+**/.packages
+**/build/
+app/lib/generated_plugin_registrant.dart
+
+# ==========================================
+# Android Platform Specific
+# ==========================================
+**/android/**/gradlew
+**/android/**/gradlew.bat
+**/android/**/gradle/wrapper/gradle-wrapper.jar
+**/android/.gradle/
+**/android/captures/
+**/android/app/build/
+**/*.apk
+**/*.aab
+**/*.jks
+**/*.keystore
+local.properties
+
+# ==========================================
+# Local Configurations & Test Artifacts
+# ==========================================
+remote-config.json
+*.log
+
+# ==========================================
+# IDE & System Crap
+# ==========================================
+.idea/
+.vscode/
+*.swp
+*~
+.DS_Store
+*.orig

@@ -1,17 +1,15 @@
-use crate::protocol::{DPadAction, KeyState, MediaAction, PowerAction};
+use crate::protocol::{DPadAction, KeyState, MediaAction, PowerAction, TargetEnvironment};
 use anyhow::{Context, Result};
 use evdev::uinput::{VirtualDevice, VirtualDeviceBuilder};
 use evdev::{AttributeSet, EventType, InputEvent, Key, RelativeAxisType};
 use std::sync::Mutex;
 use tracing::{info, warn};
 
-/// Low-level Linux `/dev/uinput` abstraction emitting kernel input events.
 pub struct InputEngine {
     device: Mutex<VirtualDevice>,
 }
 
 impl InputEngine {
-    /// Registers virtual controller with navigation, multimedia, and pointer capabilities.
     pub fn new() -> Result<Self> {
         let mut keys = AttributeSet::<Key>::new();
 
@@ -26,6 +24,34 @@ impl InputEngine {
         keys.insert(Key::KEY_LEFTMETA);
         keys.insert(Key::KEY_HOMEPAGE);
         keys.insert(Key::KEY_MENU);
+        keys.insert(Key::BTN_MODE);
+
+        // Standard Keyboard Letters (A-Z)
+        for code in Key::KEY_A.0..=Key::KEY_Z.0 {
+            keys.insert(Key(code));
+        }
+
+        // Standard Digits (0-9)
+        keys.insert(Key::KEY_0);
+        keys.insert(Key::KEY_1);
+        keys.insert(Key::KEY_2);
+        keys.insert(Key::KEY_3);
+        keys.insert(Key::KEY_4);
+        keys.insert(Key::KEY_5);
+        keys.insert(Key::KEY_6);
+        keys.insert(Key::KEY_7);
+        keys.insert(Key::KEY_8);
+        keys.insert(Key::KEY_9);
+
+        // Symbols & Modifiers
+        keys.insert(Key::KEY_SPACE);
+        keys.insert(Key::KEY_DOT);
+        keys.insert(Key::KEY_COMMA);
+        keys.insert(Key::KEY_SLASH);
+        keys.insert(Key::KEY_MINUS);
+        keys.insert(Key::KEY_EQUAL);
+        keys.insert(Key::KEY_SEMICOLON);
+        keys.insert(Key::KEY_LEFTSHIFT);
 
         // Multimedia controls
         keys.insert(Key::KEY_PLAYPAUSE);
@@ -44,7 +70,7 @@ impl InputEngine {
         keys.insert(Key::BTN_RIGHT);
         keys.insert(Key::BTN_MIDDLE);
 
-        // Relative axes for mouse/touchpad emulation
+        // Relative axes for mouse/touchpad
         let mut rel_axes = AttributeSet::<RelativeAxisType>::new();
         rel_axes.insert(RelativeAxisType::REL_X);
         rel_axes.insert(RelativeAxisType::REL_Y);
@@ -63,20 +89,17 @@ impl InputEngine {
         })
     }
 
-    /// Emits a batch of raw input events followed by kernel synchronization.
     fn emit(&self, events: &[InputEvent]) -> Result<()> {
         let mut dev = self.device.lock().unwrap();
         dev.emit(events).context("Failed to emit kernel input events")?;
         Ok(())
     }
 
-    /// Emits single key event (press=1, release=0).
     pub fn send_key_event(&self, key: Key, val: i32) -> Result<()> {
         let ev = InputEvent::new(EventType::KEY, key.0, val);
         self.emit(&[ev])
     }
 
-    /// Emits discrete click (press -> sync -> release -> sync).
     pub fn click_key(&self, key: Key) -> Result<()> {
         let press = InputEvent::new(EventType::KEY, key.0, 1);
         let syn = InputEvent::new(EventType::SYNCHRONIZATION, 0, 0);
@@ -84,8 +107,7 @@ impl InputEngine {
         self.emit(&[press, syn, release, syn])
     }
 
-    /// Handles DPad state changes.
-    pub fn handle_dpad(&self, action: DPadAction, state: KeyState) -> Result<()> {
+    pub fn handle_dpad(&self, action: DPadAction, state: KeyState, env: TargetEnvironment) -> Result<()> {
         let key = match action {
             DPadAction::Up => Key::KEY_UP,
             DPadAction::Down => Key::KEY_DOWN,
@@ -93,7 +115,10 @@ impl InputEngine {
             DPadAction::Right => Key::KEY_RIGHT,
             DPadAction::Select => Key::KEY_ENTER,
             DPadAction::Back => Key::KEY_ESC,
-            DPadAction::Home => Key::KEY_LEFTMETA,
+            DPadAction::Home => match env {
+                TargetEnvironment::PlasmaBigscreen => Key::KEY_HOMEPAGE,
+                _ => Key::KEY_LEFTMETA,
+            },
             DPadAction::Menu => Key::KEY_MENU,
         };
 
@@ -105,7 +130,52 @@ impl InputEngine {
         Ok(())
     }
 
-    /// Handles consumer multimedia key clicks.
+    pub fn type_text(&self, text: &str) -> Result<()> {
+        for ch in text.chars() {
+            if ch == '\n' {
+                self.click_key(Key::KEY_ENTER)?;
+            } else if ch == '\u{8}' {
+                self.click_key(Key::KEY_BACKSPACE)?;
+            } else if ch == ' ' {
+                self.click_key(Key::KEY_SPACE)?;
+            } else {
+                let (key, needs_shift) = match ch {
+                    'a'..='z' => (Key(Key::KEY_A.0 + (ch as u16 - b'a' as u16)), false),
+                    'A'..='Z' => (Key(Key::KEY_A.0 + (ch as u16 - b'A' as u16)), true),
+                    '0' => (Key::KEY_0, false),
+                    '1' => (Key::KEY_1, false),
+                    '2' => (Key::KEY_2, false),
+                    '3' => (Key::KEY_3, false),
+                    '4' => (Key::KEY_4, false),
+                    '5' => (Key::KEY_5, false),
+                    '6' => (Key::KEY_6, false),
+                    '7' => (Key::KEY_7, false),
+                    '8' => (Key::KEY_8, false),
+                    '9' => (Key::KEY_9, false),
+                    '.' => (Key::KEY_DOT, false),
+                    ',' => (Key::KEY_COMMA, false),
+                    '-' => (Key::KEY_MINUS, false),
+                    '/' => (Key::KEY_SLASH, false),
+                    '=' => (Key::KEY_EQUAL, false),
+                    ';' => (Key::KEY_SEMICOLON, false),
+                    ':' => (Key::KEY_SEMICOLON, true),
+                    '?' => (Key::KEY_SLASH, true),
+                    '_' => (Key::KEY_MINUS, true),
+                    _ => continue,
+                };
+
+                if needs_shift {
+                    self.send_key_event(Key::KEY_LEFTSHIFT, 1)?;
+                    self.click_key(key)?;
+                    self.send_key_event(Key::KEY_LEFTSHIFT, 0)?;
+                } else {
+                    self.click_key(key)?;
+                }
+            }
+        }
+        Ok(())
+    }
+
     pub fn handle_media(&self, action: MediaAction) -> Result<()> {
         let key = match action {
             MediaAction::PlayPause => Key::KEY_PLAYPAUSE,
@@ -118,7 +188,6 @@ impl InputEngine {
         self.click_key(key)
     }
 
-    /// Handles system power key clicks.
     pub fn handle_power(&self, action: PowerAction) -> Result<()> {
         let key = match action {
             PowerAction::Suspend => Key::KEY_SLEEP,
@@ -128,14 +197,12 @@ impl InputEngine {
         self.click_key(key)
     }
 
-    /// Emits relative cursor displacement.
     pub fn handle_mouse_move(&self, dx: i32, dy: i32) -> Result<()> {
         let ev_x = InputEvent::new(EventType::RELATIVE, RelativeAxisType::REL_X.0, dx);
         let ev_y = InputEvent::new(EventType::RELATIVE, RelativeAxisType::REL_Y.0, dy);
         self.emit(&[ev_x, ev_y])
     }
 
-    /// Emits pointer button clicks and states.
     pub fn handle_mouse_button(&self, button: u8, state: KeyState) -> Result<()> {
         let btn = match button {
             1 => Key::BTN_LEFT,
@@ -151,13 +218,11 @@ impl InputEngine {
         Ok(())
     }
 
-    /// Emits relative vertical scrolling steps.
     pub fn handle_scroll(&self, dy: i32) -> Result<()> {
         let ev = InputEvent::new(EventType::RELATIVE, RelativeAxisType::REL_WHEEL.0, dy);
         self.emit(&[ev])
     }
 
-    /// Releases stuck/hanging keys during failover or disconnection.
     pub fn release_dpad_keys(&self, actions: &[DPadAction]) {
         for action in actions {
             let key = match action {

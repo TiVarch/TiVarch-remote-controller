@@ -12,25 +12,35 @@ name = "tivarch-remote-daemon"
 path = "src/main.rs"
 
 [dependencies]
-# Async Runtime & Eşzamanlılık
+# Async Runtime & Concurrency
 tokio = { version = "1", features = ["full"] }
 futures-util = "0.3"
 
-# Web Server & WebSocket (Wi-Fi katmanı)
+# Web Server & WebSocket (Wi-Fi Layer)
 axum = { version = "0.8", features = ["ws"] }
 tower-http = { version = "0.6", features = ["cors", "fs"] }
+mdns-sd = "0.13"
 
-# Linux Çekirdeği Girdi Aygıtı Emülasyonu (/dev/uinput)
-evdev = "0.12"
+# Linux Kernel Input Device Emulation
+evdev = { version = "0.12", features = ["tokio"] }
 
 # Bluetooth Low Energy (BlueZ D-Bus GATT Server)
-bluer = { version = "0.17", features = ["bluetoothd"] }
+bluer = { version = "0.17", features = ["full", "bluetoothd"] }
 
-# Serileştirme (İstemci & Sunucu veri protokolü)
+# Serialization & Protocols
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+uuid = { version = "1.10", features = ["v4", "serde"] }
 
-# Hata ve Log Yönetimi
+# Network & Utilities
+local-ip-address = "0.6"
+qrcode = "0.14"
+
+# File System & Storage
+dirs = "5.0"
+tempfile = "3.12"
+
+# Error Handling & Logging
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 anyhow = "1.0"

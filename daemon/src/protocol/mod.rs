@@ -2,7 +2,6 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::time::{Duration, Instant};
 
-/// Directional pad and core navigation buttons.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum DPadAction {
@@ -16,7 +15,6 @@ pub enum DPadAction {
     Menu,
 }
 
-/// Standard multimedia control actions.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum MediaAction {
@@ -28,7 +26,6 @@ pub enum MediaAction {
     Mute,
 }
 
-/// System power states with rate-limit protections.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum PowerAction {
@@ -37,7 +34,6 @@ pub enum PowerAction {
     Reboot,
 }
 
-/// Input key physical switch states.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum KeyState {
@@ -46,7 +42,6 @@ pub enum KeyState {
     Click,
 }
 
-/// Supported target desktop shells and media center profiles.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum TargetEnvironment {
@@ -55,10 +50,14 @@ pub enum TargetEnvironment {
     KodiMediaCenter,
 }
 
-/// High-level commands received from network/BLE transport layers.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", content = "payload", rename_all = "snake_case")]
 pub enum RemoteCommand {
+    PairRequest {
+        device_id: String,
+        device_name: String,
+        token: String,
+    },
     DPad { action: DPadAction, state: KeyState },
     Media(MediaAction),
     Power(PowerAction),
@@ -67,26 +66,25 @@ pub enum RemoteCommand {
     MouseButton { button: u8, state: KeyState },
     Scroll { dy: i32 },
     SetProfile { profile: TargetEnvironment },
+    LaunchApp { app_id: String },
     Ping,
 }
 
-/// Sequenced envelope ensuring packet ordering and deduplication.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RemotePacket {
     pub seq: u64,
     pub command: RemoteCommand,
 }
 
-/// Structured responses sent back to clients.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", content = "payload", rename_all = "snake_case")]
 pub enum RemoteResponse {
     Pong,
     Ack,
+    PairSuccess { server_name: String },
     Error { message: String },
 }
 
-/// Core state machine tracking active keys, debounce timestamps, and session continuity.
 #[derive(Debug)]
 pub struct InputStateMachine {
     pub active_dpad_keys: HashSet<DPadAction>,
@@ -112,7 +110,7 @@ impl InputStateMachine {
     pub fn new() -> Self {
         Self::default()
     }
-    
+
     #[allow(dead_code)]
     pub fn with_environment(env: TargetEnvironment) -> Self {
         Self {
@@ -121,18 +119,15 @@ impl InputStateMachine {
         }
     }
 
-    /// Resets sequence counter and clears active key states on a fresh connection.
     pub fn reset_session(&mut self) {
         self.last_sequence_id = 0;
         self.active_dpad_keys.clear();
     }
 
-    /// Updates active environment mapping profile.
     pub fn set_environment(&mut self, env: TargetEnvironment) {
         self.environment = env;
     }
 
-    /// Enforces monotonic sequence numbers to drop delayed or duplicated UDP/WS packets.
     pub fn validate_sequence(&mut self, seq: u64) -> bool {
         if seq > self.last_sequence_id {
             self.last_sequence_id = seq;
@@ -142,7 +137,6 @@ impl InputStateMachine {
         }
     }
 
-    /// Enforces cooldown duration between sensitive system power events.
     pub fn validate_power_action(&mut self, now: Instant) -> bool {
         if let Some(last) = self.last_power_event {
             if now.duration_since(last) < self.power_cooldown {
@@ -153,7 +147,6 @@ impl InputStateMachine {
         true
     }
 
-    /// Updates internal track of physical button hold states.
     pub fn update_dpad_state(&mut self, action: DPadAction, state: KeyState) -> bool {
         match state {
             KeyState::Press => self.active_dpad_keys.insert(action),
@@ -162,7 +155,6 @@ impl InputStateMachine {
         }
     }
 
-    /// Drains all held keys for the dead-man switch during connection loss.
     pub fn drain_active_keys(&mut self) -> Vec<DPadAction> {
         self.active_dpad_keys.drain().collect()
     }

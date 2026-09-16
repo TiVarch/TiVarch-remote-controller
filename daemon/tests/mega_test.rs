@@ -414,8 +414,8 @@ fn test_37_bluetooth_advertisement_builder() {
 #[test]
 fn test_38_bluetooth_report_map_structure() {
     assert!(!HID_REPORT_MAP.is_empty());
-    assert_eq!(HID_REPORT_MAP[0], 0x05); // Usage Page
-    assert_eq!(HID_REPORT_MAP[1], 0x0C); // Consumer
+    assert_eq!(HID_REPORT_MAP[0], 0x05);
+    assert_eq!(HID_REPORT_MAP[1], 0x0C);
 }
 
 #[test]
@@ -438,4 +438,27 @@ fn test_40_repeated_session_resets() {
         assert_eq!(sm.last_sequence_id, 0);
         assert!(sm.active_dpad_keys.is_empty());
     }
+}
+
+#[test]
+fn test_41_json_roundtrip_launch_app() {
+    let cmd = RemoteCommand::LaunchApp {
+        app_id: "youtube".to_string(),
+    };
+    let packet = RemotePacket { seq: 15, command: cmd };
+    let json = serde_json::to_string(&packet).unwrap();
+    let parsed: RemotePacket = serde_json::from_str(&json).unwrap();
+
+    match parsed.command {
+        RemoteCommand::LaunchApp { app_id } => assert_eq!(app_id, "youtube"),
+        _ => panic!("Expected LaunchApp command"),
+    }
+}
+
+#[test]
+fn test_42_bigscreen_home_key_behavior() {
+    let mut sm = InputStateMachine::new();
+    assert_eq!(sm.environment, TargetEnvironment::PlasmaBigscreen);
+    sm.set_environment(TargetEnvironment::PlasmaDesktop);
+    assert_eq!(sm.environment, TargetEnvironment::PlasmaDesktop);
 }

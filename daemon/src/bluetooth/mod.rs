@@ -1,5 +1,5 @@
 use crate::input::InputEngine;
-use crate::protocol::{DPadAction, KeyState};
+use crate::protocol::{DPadAction, KeyState, TargetEnvironment};
 use anyhow::Result;
 use bluer::adv::{Advertisement, Type as AdvType};
 use bluer::agent::{Agent, AgentHandle};
@@ -202,9 +202,17 @@ pub async fn start_ble_service(input: Arc<InputEngine>) -> Result<()> {
                                                     } else if byte & 0x08 != 0 {
                                                         let _ = engine.handle_media(crate::protocol::MediaAction::PlayPause);
                                                     } else if byte & 0x10 != 0 {
-                                                        let _ = engine.handle_dpad(DPadAction::Back, KeyState::Click);
+                                                        let _ = engine.handle_dpad(
+                                                            DPadAction::Back,
+                                                            KeyState::Click,
+                                                            TargetEnvironment::PlasmaBigscreen,
+                                                        );
                                                     } else if byte & 0x40 != 0 {
-                                                        let _ = engine.handle_dpad(DPadAction::Home, KeyState::Click);
+                                                        let _ = engine.handle_dpad(
+                                                            DPadAction::Home,
+                                                            KeyState::Click,
+                                                            TargetEnvironment::PlasmaBigscreen,
+                                                        );
                                                     }
                                                 }
                                                 Ok(())
